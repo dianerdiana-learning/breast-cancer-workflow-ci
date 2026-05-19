@@ -239,7 +239,7 @@ def main() -> None:
             for key, value in test_metrics.items():
                 mlflow.log_metric(f"test_{key}", value)
 
-            mlflow.sklearn.log_model(best_model, artifact_path="model")
+            mlflow.sklearn.log_model(best_model, name="model")
             mlflow.log_artifacts(str(model_dir), artifact_path="model")
             mlflow.log_artifact(str(estimator_file))
             mlflow.log_artifact(str(metric_info_file))
