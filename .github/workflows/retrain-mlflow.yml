@@ -47,7 +47,7 @@ jobs:
           pip install mlflow==3.12.0
 
       - name: Run mlflow project
-        run: mlflow run MLProject --env-manager local -e train
+        run: mlflow run MLProject --env-manager local -e train --experiment-name "breast-cancer-tuning-manual"
 
       - name: Get latest MLflow run_id
         id: latest_run
