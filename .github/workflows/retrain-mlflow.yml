@@ -4,112 +4,142 @@ on:
   push:
     branches:
       - main
-      - master
   pull_request:
     branches:
       - main
-      - master
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  retrain:
-    name: Retrain with MLflow Project
+  mlflow-ci:
+    name: MLflow CI Pipeline
     runs-on: ubuntu-latest
+    env:
+      GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+      GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Run actions/checkout@v3
+        uses: actions/checkout@v3
 
-      - name: Setup Python
+      - name: Set up Python 3.12.7
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.12.7'
+
+      - name: Check Env
+        run: |
+          python --version
+          pip --version
+          docker --version
+          test -f MLProject/breast_cancer_preprocessed.csv
+          echo "Workspace: $(pwd)"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r MLProject/requirements.txt
-
-      - name: Verify dataset exists
-        run: test -f MLProject/breast_cancer_preprocessed.csv
-
-      - name: Run MLflow Project retraining
-        run: mlflow run MLProject --env-manager local -e train
-
-      - name: Upload training artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlflow-training-output
-          path: MLProject/outputs
-          if-no-files-found: error
-
-      - name: Upload MLflow run metadata
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlflow-run-store
-          path: MLProject/mlruns
-          if-no-files-found: error
-
-  build-docker:
-    name: Build and Push Docker Image
-    runs-on: ubuntu-latest
-    needs: retrain
-    if: github.event_name != 'pull_request'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install MLflow and Docker tooling
-        run: |
-          python -m pip install --upgrade pip
           pip install mlflow==3.12.0
 
-      - name: Download training artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: mlflow-training-output
-          path: MLProject/outputs
+      - name: Run mlflow project
+        run: mlflow run MLProject --env-manager local -e train
 
-      - name: Validate Docker Hub secrets
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}
+      - name: Get latest MLflow run_id
+        id: latest_run
         run: |
-          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ] || [ -z "$DOCKERHUB_REPO" ]; then
-            echo "GitHub Secrets DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, dan DOCKERHUB_REPO wajib diisi untuk memenuhi level Advance."
-            exit 1
-          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          summary_file = Path("MLProject/outputs/latest_run.json")
+          if not summary_file.exists():
+              raise FileNotFoundError(f"File not found: {summary_file}")
 
-      - name: Build Docker image from MLflow model
+          summary = json.loads(summary_file.read_text(encoding="utf-8"))
+          run_id = summary.get("run_id", "").strip()
+          if not run_id:
+              raise ValueError("run_id is empty in latest_run.json")
+
+          github_output = Path(__import__("os").environ["GITHUB_OUTPUT"])
+          with github_output.open("a", encoding="utf-8") as fh:
+              fh.write(f"run_id={run_id}\n")
+          print(f"Resolved run_id: {run_id}")
+          PY
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: Upload to Google Drive
+        env:
+          RUN_ID: ${{ steps.latest_run.outputs.run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          outputs_dir = Path("MLProject/outputs")
+          if not outputs_dir.exists():
+              raise FileNotFoundError(f"Outputs folder not found: {outputs_dir}")
+
+          run_id = os.environ.get("RUN_ID", "unknown")
+          archive_name = f"mlproject-outputs-{run_id}"
+          archive_path = shutil.make_archive(archive_name, "zip", root_dir=outputs_dir)
+
+          service_account_info = json.loads(os.environ["GDRIVE_SERVICE_ACCOUNT_JSON"])
+          credentials = service_account.Credentials.from_service_account_info(
+              service_account_info,
+              scopes=["https://www.googleapis.com/auth/drive.file"],
+          )
+          service = build("drive", "v3", credentials=credentials, cache_discovery=False)
+
+          metadata = {
+              "name": Path(archive_path).name,
+              "parents": [os.environ["GDRIVE_FOLDER_ID"]],
+          }
+          media = MediaFileUpload(archive_path, mimetype="application/zip", resumable=False)
+          uploaded = service.files().create(body=metadata, media_body=media, fields="id,name").execute()
+          print(f"Uploaded: {uploaded['name']} (id={uploaded['id']})")
+          PY
+
+      - name: Build Docker Model
         env:
           LOCAL_IMAGE_NAME: breast-cancer-mlflow-ci
         run: |
           test -d MLProject/outputs/model
           mlflow models build-docker -m MLProject/outputs/model -n "$LOCAL_IMAGE_NAME"
 
-      - name: Tag and push Docker image
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Tag Docker Image
         env:
           LOCAL_IMAGE_NAME: breast-cancer-mlflow-ci
-          DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}
+          DOCKERHUB_REPO: ${{ env.DOCKERHUB_REPO }}
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
           docker tag "$LOCAL_IMAGE_NAME" "$DOCKERHUB_REPO:$SHORT_SHA"
           docker tag "$LOCAL_IMAGE_NAME" "$DOCKERHUB_REPO:latest"
+
+      - name: Push Docker Image
+        env:
+          DOCKERHUB_REPO: ${{ env.DOCKERHUB_REPO }}
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
           docker push "$DOCKERHUB_REPO:$SHORT_SHA"
           docker push "$DOCKERHUB_REPO:latest"
