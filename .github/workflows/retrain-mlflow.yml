@@ -1,0 +1,115 @@
+name: Retrain Breast Cancer Model
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retrain:
+    name: Retrain with MLflow Project
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r MLProject/requirements.txt
+
+      - name: Verify dataset exists
+        run: test -f MLProject/breast_cancer_preprocessed.csv
+
+      - name: Run MLflow Project retraining
+        run: mlflow run MLProject --env-manager local -e train
+
+      - name: Upload training artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-training-output
+          path: MLProject/outputs
+          if-no-files-found: error
+
+      - name: Upload MLflow run metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-run-store
+          path: MLProject/mlruns
+          if-no-files-found: error
+
+  build-docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: retrain
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install MLflow and Docker tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install mlflow==3.12.0
+
+      - name: Download training artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mlflow-training-output
+          path: MLProject/outputs
+
+      - name: Validate Docker Hub secrets
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}
+        run: |
+          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ] || [ -z "$DOCKERHUB_REPO" ]; then
+            echo "GitHub Secrets DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, dan DOCKERHUB_REPO wajib diisi untuk memenuhi level Advance."
+            exit 1
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Docker image from MLflow model
+        env:
+          LOCAL_IMAGE_NAME: breast-cancer-mlflow-ci
+        run: |
+          test -d MLProject/outputs/model
+          mlflow models build-docker -m MLProject/outputs/model -n "$LOCAL_IMAGE_NAME"
+
+      - name: Tag and push Docker image
+        env:
+          LOCAL_IMAGE_NAME: breast-cancer-mlflow-ci
+          DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          docker tag "$LOCAL_IMAGE_NAME" "$DOCKERHUB_REPO:$SHORT_SHA"
+          docker tag "$LOCAL_IMAGE_NAME" "$DOCKERHUB_REPO:latest"
+          docker push "$DOCKERHUB_REPO:$SHORT_SHA"
+          docker push "$DOCKERHUB_REPO:latest"
