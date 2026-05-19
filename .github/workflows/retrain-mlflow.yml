@@ -17,8 +17,6 @@ jobs:
     name: MLflow CI Pipeline
     runs-on: ubuntu-latest
     env:
-      GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
-      GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}
@@ -76,48 +74,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-      - name: Upload to Google Drive
-        env:
-          RUN_ID: ${{ steps.latest_run.outputs.run_id }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import shutil
-          from pathlib import Path
-
-          from google.oauth2 import service_account
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaFileUpload
-
-          outputs_dir = Path("MLProject/outputs")
-          if not outputs_dir.exists():
-              raise FileNotFoundError(f"Outputs folder not found: {outputs_dir}")
-
-          run_id = os.environ.get("RUN_ID", "unknown")
-          archive_name = f"mlproject-outputs-{run_id}"
-          archive_path = shutil.make_archive(archive_name, "zip", root_dir=outputs_dir)
-
-          service_account_info = json.loads(os.environ["GDRIVE_SERVICE_ACCOUNT_JSON"])
-          credentials = service_account.Credentials.from_service_account_info(
-              service_account_info,
-              scopes=["https://www.googleapis.com/auth/drive.file"],
-          )
-          service = build("drive", "v3", credentials=credentials, cache_discovery=False)
-
-          metadata = {
-              "name": Path(archive_path).name,
-              "parents": [os.environ["GDRIVE_FOLDER_ID"]],
-          }
-          media = MediaFileUpload(archive_path, mimetype="application/zip", resumable=False)
-          uploaded = service.files().create(
-              body=metadata,
-              media_body=media,
-              fields="id,name",
-              supportsAllDrives=True,
-            ).execute()
-          print(f"Uploaded: {uploaded['name']} (id={uploaded['id']})")
-          PY
+      - name: Upload to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlproject-outputs-${{ steps.latest_run.outputs.run_id }}
+          path: MLProject/outputs/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build Docker Model
         env:
