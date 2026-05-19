@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -42,13 +43,17 @@ def dataset_path() -> Path:
     return project_root() / "breast_cancer_preprocessed.csv"
 
 
+def outputs_dir() -> Path:
+    return project_root() / "outputs"
+
+
 def _is_dagshub_mode() -> bool:
     return bool(os.getenv("DAGSHUB_REPO_OWNER") and os.getenv("DAGSHUB_REPO_NAME"))
 
 
 def configure_tracking() -> None:
     if _is_dagshub_mode():
-        import dagshub  # noqa: PLC0415
+        import dagshub
 
         dagshub.init(
             repo_owner=os.environ["DAGSHUB_REPO_OWNER"],
@@ -91,6 +96,27 @@ def get_metrics(y_true, y_pred, y_proba=None) -> dict[str, float]:
         metrics["roc_auc"] = roc_auc_score(y_true, y_proba)
 
     return metrics
+
+
+def persist_ci_outputs(
+    files_to_copy: list[Path],
+    model_source_dir: Path,
+    run_summary: dict[str, str | float | dict[str, float]],
+) -> Path:
+    output_dir = outputs_dir()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    model_output_dir = output_dir / "model"
+    if model_output_dir.exists():
+        shutil.rmtree(model_output_dir)
+    shutil.copytree(model_source_dir, model_output_dir)
+
+    for file_path in files_to_copy:
+        shutil.copy2(file_path, output_dir / file_path.name)
+
+    summary_file = output_dir / "latest_run.json"
+    summary_file.write_text(json.dumps(run_summary, indent=2), encoding="utf-8")
+    return summary_file
 
 
 def main() -> None:
@@ -223,9 +249,31 @@ def main() -> None:
             mlflow.log_artifact(str(roc_file))
             mlflow.log_artifact(str(fi_file))
 
+            active_run = mlflow.active_run()
+            summary_file = persist_ci_outputs(
+                files_to_copy=[
+                    metric_info_file,
+                    estimator_file,
+                    cm_file,
+                    roc_file,
+                    fi_file,
+                ],
+                model_source_dir=model_dir,
+                run_summary={
+                    "experiment_name": experiment_name,
+                    "run_id": active_run.info.run_id,
+                    "artifact_uri": active_run.info.artifact_uri,
+                    "tracking_uri": mlflow.get_tracking_uri(),
+                    "model_artifact_path": "model",
+                    "train_metrics": train_metrics,
+                    "test_metrics": test_metrics,
+                },
+            )
+
             print("Training Skilled/Advance selesai.")
             print(f"Tracking URI: {mlflow.get_tracking_uri()}")
-            print(f"Run ID: {mlflow.active_run().info.run_id}")
+            print(f"Run ID: {active_run.info.run_id}")
+            print(f"CI outputs: {summary_file.parent}")
 
 
 if __name__ == "__main__":
