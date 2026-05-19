@@ -110,7 +110,12 @@ jobs:
               "parents": [os.environ["GDRIVE_FOLDER_ID"]],
           }
           media = MediaFileUpload(archive_path, mimetype="application/zip", resumable=False)
-          uploaded = service.files().create(body=metadata, media_body=media, fields="id,name").execute()
+          uploaded = service.files().create(
+              body=metadata,
+              media_body=media,
+              fields="id,name",
+              supportsAllDrives=True,
+            ).execute()
           print(f"Uploaded: {uploaded['name']} (id={uploaded['id']})")
           PY
 
