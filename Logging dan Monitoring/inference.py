@@ -2,7 +2,6 @@ import random
 import time
 import requests
 
-# normal traffic
 URL = "http://localhost:8000/predict"
 
 
@@ -46,6 +45,7 @@ def make_payload(include_target: bool = False):
     return payload
 
 
+# normal traffic
 for i in range(120):
     payload = make_payload()
 
