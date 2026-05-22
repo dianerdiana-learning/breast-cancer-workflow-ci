@@ -12,6 +12,8 @@ Catatan konteks saat ini:
 - Endpoint inference exporter: POST /predict
 - Endpoint metrics exporter: GET /metrics
 - Model server default yang dipanggil exporter: http://127.0.0.1:5000/invocations
+- Payload request harus memakai nama fitur yang sama persis dengan kolom model.
+- Untuk contoh model ini, ada 30 fitur input; `target` hanya dipakai sebagai label evaluasi dan tidak dikirim ke model.
 
 ## 1) Checklist Run Service
 
@@ -35,7 +37,56 @@ curl http://localhost:8000/health
 curl http://localhost:8000/metrics
 ```
 
-## 2) Inference Normal (Biar Panel Muncul)
+## 2) Mapping Payload Sesuai Fitur Model
+
+Model dilatih dengan 30 fitur berikut. Saat request ke exporter, payload harus mengikuti nama kolom ini persis; `target` boleh ditambahkan hanya untuk hitung `model_accuracy`.
+
+```python
+# feature_payload.py
+import random
+
+
+def make_payload(include_target: bool = False):
+    payload = {
+        "mean radius": round(random.uniform(-3.0, 3.0), 4),
+        "mean texture": round(random.uniform(-3.0, 3.0), 4),
+        "mean perimeter": round(random.uniform(-3.0, 3.0), 4),
+        "mean area": round(random.uniform(-3.0, 3.0), 4),
+        "mean smoothness": round(random.uniform(-3.0, 3.0), 4),
+        "mean compactness": round(random.uniform(-3.0, 3.0), 4),
+        "mean concavity": round(random.uniform(-3.0, 3.0), 4),
+        "mean concave points": round(random.uniform(-3.0, 3.0), 4),
+        "mean symmetry": round(random.uniform(-3.0, 3.0), 4),
+        "mean fractal dimension": round(random.uniform(-3.0, 3.0), 4),
+        "radius error": round(random.uniform(-3.0, 3.0), 4),
+        "texture error": round(random.uniform(-3.0, 3.0), 4),
+        "perimeter error": round(random.uniform(-3.0, 3.0), 4),
+        "area error": round(random.uniform(-3.0, 3.0), 4),
+        "smoothness error": round(random.uniform(-3.0, 3.0), 4),
+        "compactness error": round(random.uniform(-3.0, 3.0), 4),
+        "concavity error": round(random.uniform(-3.0, 3.0), 4),
+        "concave points error": round(random.uniform(-3.0, 3.0), 4),
+        "symmetry error": round(random.uniform(-3.0, 3.0), 4),
+        "fractal dimension error": round(random.uniform(-3.0, 3.0), 4),
+        "worst radius": round(random.uniform(-3.0, 3.0), 4),
+        "worst texture": round(random.uniform(-3.0, 3.0), 4),
+        "worst perimeter": round(random.uniform(-3.0, 3.0), 4),
+        "worst area": round(random.uniform(-3.0, 3.0), 4),
+        "worst smoothness": round(random.uniform(-3.0, 3.0), 4),
+        "worst compactness": round(random.uniform(-3.0, 3.0), 4),
+        "worst concavity": round(random.uniform(-3.0, 3.0), 4),
+        "worst concave points": round(random.uniform(-3.0, 3.0), 4),
+        "worst symmetry": round(random.uniform(-3.0, 3.0), 4),
+        "worst fractal dimension": round(random.uniform(-3.0, 3.0), 4),
+    }
+
+    if include_target:
+        payload["target"] = random.choice([0, 1])
+
+    return payload
+```
+
+## 3) Inference Normal (Biar Panel Muncul)
 
 Script ini menghasilkan traffic stabil ke exporter agar panel metric bergerak.
 
@@ -47,12 +98,44 @@ import requests
 
 URL = "http://localhost:8000/predict"
 
-for i in range(120):
-    payload = {
-        "radius_mean": round(random.uniform(10.0, 18.0), 4),
-        "texture_mean": round(random.uniform(10.0, 30.0), 4),
-        "perimeter_mean": round(random.uniform(60.0, 140.0), 4),
+
+def make_payload():
+    return {
+        "mean radius": round(random.uniform(-3.0, 3.0), 4),
+        "mean texture": round(random.uniform(-3.0, 3.0), 4),
+        "mean perimeter": round(random.uniform(-3.0, 3.0), 4),
+        "mean area": round(random.uniform(-3.0, 3.0), 4),
+        "mean smoothness": round(random.uniform(-3.0, 3.0), 4),
+        "mean compactness": round(random.uniform(-3.0, 3.0), 4),
+        "mean concavity": round(random.uniform(-3.0, 3.0), 4),
+        "mean concave points": round(random.uniform(-3.0, 3.0), 4),
+        "mean symmetry": round(random.uniform(-3.0, 3.0), 4),
+        "mean fractal dimension": round(random.uniform(-3.0, 3.0), 4),
+        "radius error": round(random.uniform(-3.0, 3.0), 4),
+        "texture error": round(random.uniform(-3.0, 3.0), 4),
+        "perimeter error": round(random.uniform(-3.0, 3.0), 4),
+        "area error": round(random.uniform(-3.0, 3.0), 4),
+        "smoothness error": round(random.uniform(-3.0, 3.0), 4),
+        "compactness error": round(random.uniform(-3.0, 3.0), 4),
+        "concavity error": round(random.uniform(-3.0, 3.0), 4),
+        "concave points error": round(random.uniform(-3.0, 3.0), 4),
+        "symmetry error": round(random.uniform(-3.0, 3.0), 4),
+        "fractal dimension error": round(random.uniform(-3.0, 3.0), 4),
+        "worst radius": round(random.uniform(-3.0, 3.0), 4),
+        "worst texture": round(random.uniform(-3.0, 3.0), 4),
+        "worst perimeter": round(random.uniform(-3.0, 3.0), 4),
+        "worst area": round(random.uniform(-3.0, 3.0), 4),
+        "worst smoothness": round(random.uniform(-3.0, 3.0), 4),
+        "worst compactness": round(random.uniform(-3.0, 3.0), 4),
+        "worst concavity": round(random.uniform(-3.0, 3.0), 4),
+        "worst concave points": round(random.uniform(-3.0, 3.0), 4),
+        "worst symmetry": round(random.uniform(-3.0, 3.0), 4),
+        "worst fractal dimension": round(random.uniform(-3.0, 3.0), 4),
     }
+
+
+for i in range(120):
+    payload = make_payload()
 
     try:
         r = requests.post(URL, json=payload, timeout=10)
@@ -69,7 +152,7 @@ Jalankan:
 python normal_traffic.py
 ```
 
-## 3) Inference Dengan Label (Agar model_accuracy Terisi)
+## 4) Inference Dengan Label (Agar model_accuracy Terisi)
 
 model_accuracy pada exporter hanya diupdate jika payload menyertakan salah satu field:
 
@@ -87,13 +170,47 @@ import requests
 
 URL = "http://localhost:8000/predict"
 
-for i in range(100):
+
+def make_payload():
     payload = {
-        "radius_mean": round(random.uniform(10.0, 18.0), 4),
-        "texture_mean": round(random.uniform(10.0, 30.0), 4),
-        "perimeter_mean": round(random.uniform(60.0, 140.0), 4),
+        "mean radius": round(random.uniform(-3.0, 3.0), 4),
+        "mean texture": round(random.uniform(-3.0, 3.0), 4),
+        "mean perimeter": round(random.uniform(-3.0, 3.0), 4),
+        "mean area": round(random.uniform(-3.0, 3.0), 4),
+        "mean smoothness": round(random.uniform(-3.0, 3.0), 4),
+        "mean compactness": round(random.uniform(-3.0, 3.0), 4),
+        "mean concavity": round(random.uniform(-3.0, 3.0), 4),
+        "mean concave points": round(random.uniform(-3.0, 3.0), 4),
+        "mean symmetry": round(random.uniform(-3.0, 3.0), 4),
+        "mean fractal dimension": round(random.uniform(-3.0, 3.0), 4),
+        "radius error": round(random.uniform(-3.0, 3.0), 4),
+        "texture error": round(random.uniform(-3.0, 3.0), 4),
+        "perimeter error": round(random.uniform(-3.0, 3.0), 4),
+        "area error": round(random.uniform(-3.0, 3.0), 4),
+        "smoothness error": round(random.uniform(-3.0, 3.0), 4),
+        "compactness error": round(random.uniform(-3.0, 3.0), 4),
+        "concavity error": round(random.uniform(-3.0, 3.0), 4),
+        "concave points error": round(random.uniform(-3.0, 3.0), 4),
+        "symmetry error": round(random.uniform(-3.0, 3.0), 4),
+        "fractal dimension error": round(random.uniform(-3.0, 3.0), 4),
+        "worst radius": round(random.uniform(-3.0, 3.0), 4),
+        "worst texture": round(random.uniform(-3.0, 3.0), 4),
+        "worst perimeter": round(random.uniform(-3.0, 3.0), 4),
+        "worst area": round(random.uniform(-3.0, 3.0), 4),
+        "worst smoothness": round(random.uniform(-3.0, 3.0), 4),
+        "worst compactness": round(random.uniform(-3.0, 3.0), 4),
+        "worst concavity": round(random.uniform(-3.0, 3.0), 4),
+        "worst concave points": round(random.uniform(-3.0, 3.0), 4),
+        "worst symmetry": round(random.uniform(-3.0, 3.0), 4),
+        "worst fractal dimension": round(random.uniform(-3.0, 3.0), 4),
         "target": random.choice([0, 1]),
     }
+
+    return payload
+
+
+for i in range(100):
+    payload = make_payload()
 
     try:
         r = requests.post(URL, json=payload, timeout=10)
@@ -110,7 +227,7 @@ Jalankan:
 python labeled_traffic.py
 ```
 
-## 4) Trigger Alert: Failure Request Prediksi
+## 5) Trigger Alert: Failure Request Prediksi
 
 Alert query contoh:
 
@@ -144,7 +261,7 @@ Jalankan:
 python trigger_failure_alert.py
 ```
 
-## 5) Trigger Alert: Throughput Rendah
+## 6) Trigger Alert: Throughput Rendah
 
 Alert query contoh:
 
@@ -159,7 +276,7 @@ Langkah trigger:
 3. Tunggu sesuai for duration alert (misalnya 2 menit).
 4. Ambil screenshot state alert.
 
-## 6) Trigger Alert: Latency Tinggi
+## 7) Trigger Alert: Latency Tinggi
 
 Alert query contoh:
 
@@ -181,14 +298,42 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 URL = "http://localhost:8000/predict"
 
-payloads = [
-    {
-        "radius_mean": round(random.uniform(10.0, 18.0), 4),
-        "texture_mean": round(random.uniform(10.0, 30.0), 4),
-        "perimeter_mean": round(random.uniform(60.0, 140.0), 4),
+def make_payload():
+    return {
+        "mean radius": round(random.uniform(-3.0, 3.0), 4),
+        "mean texture": round(random.uniform(-3.0, 3.0), 4),
+        "mean perimeter": round(random.uniform(-3.0, 3.0), 4),
+        "mean area": round(random.uniform(-3.0, 3.0), 4),
+        "mean smoothness": round(random.uniform(-3.0, 3.0), 4),
+        "mean compactness": round(random.uniform(-3.0, 3.0), 4),
+        "mean concavity": round(random.uniform(-3.0, 3.0), 4),
+        "mean concave points": round(random.uniform(-3.0, 3.0), 4),
+        "mean symmetry": round(random.uniform(-3.0, 3.0), 4),
+        "mean fractal dimension": round(random.uniform(-3.0, 3.0), 4),
+        "radius error": round(random.uniform(-3.0, 3.0), 4),
+        "texture error": round(random.uniform(-3.0, 3.0), 4),
+        "perimeter error": round(random.uniform(-3.0, 3.0), 4),
+        "area error": round(random.uniform(-3.0, 3.0), 4),
+        "smoothness error": round(random.uniform(-3.0, 3.0), 4),
+        "compactness error": round(random.uniform(-3.0, 3.0), 4),
+        "concavity error": round(random.uniform(-3.0, 3.0), 4),
+        "concave points error": round(random.uniform(-3.0, 3.0), 4),
+        "symmetry error": round(random.uniform(-3.0, 3.0), 4),
+        "fractal dimension error": round(random.uniform(-3.0, 3.0), 4),
+        "worst radius": round(random.uniform(-3.0, 3.0), 4),
+        "worst texture": round(random.uniform(-3.0, 3.0), 4),
+        "worst perimeter": round(random.uniform(-3.0, 3.0), 4),
+        "worst area": round(random.uniform(-3.0, 3.0), 4),
+        "worst smoothness": round(random.uniform(-3.0, 3.0), 4),
+        "worst compactness": round(random.uniform(-3.0, 3.0), 4),
+        "worst concavity": round(random.uniform(-3.0, 3.0), 4),
+        "worst concave points": round(random.uniform(-3.0, 3.0), 4),
+        "worst symmetry": round(random.uniform(-3.0, 3.0), 4),
+        "worst fractal dimension": round(random.uniform(-3.0, 3.0), 4),
     }
-    for _ in range(300)
-]
+
+
+payloads = [make_payload() for _ in range(300)]
 
 
 def send_one(p):
@@ -218,7 +363,7 @@ Jalankan:
 python burst_traffic.py
 ```
 
-## 7) Query Cek Cepat di Grafana/Prometheus
+## 8) Query Cek Cepat di Grafana/Prometheus
 
 ```promql
 model_predictions_total
@@ -248,7 +393,7 @@ system_ram_usage
 model_accuracy
 ```
 
-## 8) Troubleshooting Singkat
+## 9) Troubleshooting Singkat
 
 - Jika semua metric no data:
   - cek /health exporter,

@@ -237,58 +237,72 @@ Daftar query panel (format siap tempel di dashboard):
 - title: Total Prediksi Model
   description: monitoring_model_predictions_total
   query: model_predictions_total
+  visualization_type: Stat
 
 - title: Laju Prediksi Model 5 Menit
   description: monitoring_rate_model_predictions_total_5m
   query: rate(model_predictions_total[5m])
+  visualization_type: Time Series
 
 - title: Jumlah Observasi Latency Model
   description: monitoring_model_prediction_latency_seconds_count
   query: model_prediction_latency_seconds_count
+  visualization_type: Stat
 
 - title: Rata-rata Latency Model 5 Menit
   description: monitoring_model_prediction_latency_avg_5m
   query: rate(model_prediction_latency_seconds_sum[5m]) / rate(model_prediction_latency_seconds_count[5m])
+  visualization_type: Time Series
 
 - title: P95 Latency Model 5 Menit
   description: monitoring_model_prediction_latency_p95_5m
   query: histogram_quantile(0.95, sum by (le) (rate(model_prediction_latency_seconds_bucket[5m])))
+  visualization_type: Time Series
 
 - title: Total HTTP Request
   description: monitoring_http_requests_total
   query: http_requests_total
+  visualization_type: Stat
 
 - title: HTTP Throughput 5 Menit
   description: monitoring_http_requests_throughput_5m
   query: rate(http_requests_total[5m])
+  visualization_type: Time Series
 
 - title: Jumlah Observasi Latency HTTP
   description: monitoring_http_request_duration_seconds_count
   query: http_request_duration_seconds_count
+  visualization_type: Stat
 
 - title: Rata-rata Latency HTTP 5 Menit
   description: monitoring_http_request_duration_avg_5m
   query: rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])
+  visualization_type: Time Series
 
 - title: CPU Usage Sistem
   description: monitoring_system_cpu_usage
   query: system_cpu_usage
+  visualization_type: Gauge # Cocok menggunakan Gauge dengan threshold (misal hijau <70%, kuning 70-85%, merah >85%)
 
 - title: RAM Usage Sistem
   description: monitoring_system_ram_usage
   query: system_ram_usage
+  visualization_type: Gauge
 
 - title: Total Prediksi Berhasil
   description: monitoring_model_prediction_success_total
   query: model_prediction_success_total
+  visualization_type: Stat
 
 - title: Total Prediksi Gagal
   description: monitoring_model_prediction_failure_total
   query: model_prediction_failure_total
+  visualization_type: Stat
 
 - title: Akurasi Model Berjalan
   description: monitoring_model_accuracy
   query: model_accuracy
+  visualization_type: Bar Gauge # Bagus untuk visualisasi nilai akurasi dalam bentuk persentase/rasio secara horizontal/vertikal
 
 Catatan: metric model_accuracy hanya akan terisi jika request ke /predict menyertakan target/y_true/label_true.
 
