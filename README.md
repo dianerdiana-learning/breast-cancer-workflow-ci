@@ -1,4 +1,4 @@
-# breast-cancer-workflow-ci
+# Breast Cancer Workflow-Ci
 
 Workflow ini memenuhi Kriteria 3 dengan menjalankan retraining model melalui MLflow Project, mengunggah artefak hasil training ke GitHub Actions, lalu membangun Docker image dari model terbaru untuk dipush ke Docker Hub.
 
