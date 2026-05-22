@@ -26,7 +26,7 @@ Job retraining mengunggah dua artifact GitHub Actions:
 
 ## Secrets yang wajib diisi
 
-Untuk memenuhi level Advance, isi GitHub Secrets berikut:
+Isi GitHub Secrets berikut:
 
 - `DOCKERHUB_USERNAME`: username Docker Hub
 - `DOCKERHUB_TOKEN`: access token Docker Hub
